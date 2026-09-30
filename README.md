@@ -1,255 +1,164 @@
-# FPGA-Based NMEA Parser using UART
+# FPGA-Based NMEA Parser via UART
 
 ## Overview
+This project implements an **FPGA-based NMEA Parser** using Verilog HDL. The system receives standard NMEA sentences through **UART communication**, processes the incoming data streams using a **Finite State Machine (FSM)**, validates the checksum in real time, and transmits the parsed results back via UART.
 
-This project implements an **FPGA-based NMEA Parser** using Verilog HDL.  
-The system receives NMEA sentences through **UART communication**, processes the incoming data using a **Finite State Machine (FSM)**, validates the checksum, and transmits the processed information back through UART.
-
-The NMEA message is generated from a PC using a Python serial transmitter and sent to the FPGA through an **FTDI USB-TTL converter**.
+A Python-based serial transmitter running on a host PC generates the NMEA messages and sends them to the FPGA through an external **FTDI USB-TTL converter**.
 
 ---
 
 ## System Architecture
 
-
-PC / Python Serial Sender
-          |
-          |
-   FTDI USB-TTL Converter
-          |
-          |
-       UART RX
-          |
-          v
-+----------------------+
-|    NMEA Parser FSM   |
-|                      |
-| - Start Detection    |
-| - Field Extraction   |
-| - Checksum Checking  |
-+----------------------+
-          |
-          |
-       UART TX
-          |
-          v
-    PC Serial Monitor
-
----
-
-# Features
-
-- UART communication using 115200 baud rate
-- FSM-based NMEA message parsing
-- Serial ASCII data reception
-- NMEA field extraction
-- XOR checksum validation
-- UART response transmission
-- LED indicators for debugging
+```text
+  [ PC / Python Serial Sender ]
+               │
+               ▼
+   [ FTDI USB-TTL Converter ]
+               │
+               ▼
+          [ UART RX ]
+               │
+               ▼
+ ┌───────────────────────────┐
+ │      NMEA Parser FSM      │
+ │                           │
+ │  • Start Detection ('$')  │
+ │  • Field Extraction       │
+ │  • Checksum Validation    │
+ └───────────────────────────┘
+               │
+               ▼
+          [ UART TX ]
+               │
+               ▼
+      [ PC Serial Monitor ]
+```
 
 ---
 
-# Hardware Specification
+## Features
+- **High-Speed UART Communication:** Configured for 115200 baud rate.
+- **Robust FSM-based Parsing:** Accurately extracts individual NMEA fields.
+- **Real-Time Validation:** Performs automatic XOR checksum calculations on incoming ASCII streams.
+- **Bi-Directional Serial Interface:** Transmits parsed results and validation status back to the host PC.
+- **Hardware Debugging:** Integrated LED status indicators for visual FSM and communication tracking.
+
+---
+
+## Hardware Specifications
 
 | Component | Specification |
 |-----------|---------------|
-| FPGA Board | Digilent Zybo |
-| FPGA Device | XC7Z010 |
-| Clock Frequency | 125 MHz |
-| Communication Interface | UART |
-| UART Converter | FTDI USB-TTL |
-| Baud Rate | 115200 bps |
+| **FPGA Board** | Digilent Zybo |
+| **FPGA Device** | XC7Z010 |
+| **Clock Frequency**| 125 MHz |
+| **Interface** | UART (via FTDI USB-TTL) |
+| **Baud Rate** | 115200 bps |
 
 ---
 
-# NMEA Processing Flow
+## Module Descriptions
 
+### 1. UART RX
+Converts incoming serial data from the FTDI module into 8-bit parallel ASCII data.
+- **Functions:** Detects the UART start bit, shifts in 8 bits of data, and flags completion.
+- **Key Signals:** Outputs `rx_data` (8-bit) and `rx_ready` (1-bit pulse).
 
-UART RX
-   |
-   v
-Receive ASCII Character
-   |
-   v
-Detect '$' Start Character
-   |
-   v
-Read NMEA Fields
-   |
-   v
-Calculate XOR Checksum
-   |
-   v
-Compare Received Checksum
-   |
-   v
-Transmit Result Through UART TX
+### 2. NMEA Parser FSM
+The core control unit responsible for interpreting the received sequence.
+- **IDLE:** Waits for the NMEA start character (`$`).
+- **START:** Initializes data buffering.
+- **READ_FIELD:** Extracts comma-separated NMEA data fields.
+- **CHECKSUM:** Captures and validates the appended checksum.
+- **DONE_OUTPUT:** Triggers the transmission of processed data.
 
----
+### 3. Checksum Validator
+Calculates the XOR value of all characters between the `$` and `*` in the NMEA message, comparing it against the received hex checksum.
+- **Key Signals:** Outputs `checksum_valid_flag` and `checksum_error_flag`.
 
-# Module Description
-
-## 1. UART RX
-
-The UART receiver converts serial data from FTDI into 8-bit parallel data.
-
-Functions:
-
-- Detect UART start bit
-- Receive 8-bit ASCII data
-- Generate `rx_ready` signal when a byte is received
-
-Output:
-
-
-rx_data
-rx_ready
+### 4. UART TX
+Sends the processed data and validation results back to the PC using standard UART framing (1 Start Bit, 8 Data Bits, 1 Stop Bit).
 
 ---
 
-## 2. NMEA Parser FSM
+## Project Structure
 
-The main processing module responsible for interpreting the received NMEA sentence.
-
-FSM States:
-
-| State | Function |
-|---|---|
-| IDLE | Waiting for NMEA start character |
-| START | Detect beginning of message |
-| READ_FIELD | Extract NMEA data fields |
-| CHECKSUM | Validate received checksum |
-| DONE_OUTPUT | Send processed data |
-
----
-
-## 3. Checksum Validator
-
-The checksum module calculates the XOR value of the received NMEA message and compares it with the checksum provided in the message.
-
-Output:
-
-
-checksum_valid_flag
-checksum_error_flag
-
----
-
-## 4. UART TX
-
-UART transmitter sends processed data back to the PC.
-
-UART frame format:
-
-
-Start Bit (0)
-      |
-8-bit Data
-      |
-Stop Bit (1)
-
----
-
-# Project Structure
-
-
+```text
 FPGA_NMEA_Parser/
-│
 ├── src/
 │   ├── nmea_parser.v
 │   ├── uart_rx.v
 │   ├── uart_tx.v
 │   └── checksum_validator.v
-│
 ├── simulation/
 │   └── nmea_parser_tb.v
-│
 ├── constraints/
 │   └── zybo.xdc
-│
 └── python/
     └── nmea_sender.py
+```
 
 ---
 
-# Implementation Steps
+## Getting Started
 
-## FPGA Implementation
+### 1. FPGA Synthesis and Implementation
+1. Open Xilinx Vivado and create a new project targeting the **Zybo (XC7Z010)** board.
+2. Import all Verilog files from the `src/` directory.
+3. Add the `zybo.xdc` file from the `constraints/` directory.
+4. Run **Synthesis**, **Implementation**, and **Generate Bitstream**.
+5. Program the Zybo board via Vivado Hardware Manager.
 
-1. Open the project using Vivado
-2. Select Zybo FPGA board
-3. Add Verilog source files
-4. Add the Zybo constraint file (.xdc)
-5. Run:
-   - Synthesis
-   - Implementation
-   - Generate Bitstream
-6. Program the FPGA
+### 2. Running the Python Test Environment
+Ensure the FTDI adapter is connected between your PC and the configured Zybo PMOD pins.
 
----
-
-## Serial Communication
-
-Install Python serial library:
-
+Install the required Python serial library:
 ```bash
 pip install pyserial
+```
 
-Run:
+Run the NMEA sender script:
+```bash
+cd python/
 python nmea_sender.py
+```
 
-The Python program sends NMEA sentences through FTDI USB-TTL to the FPGA.
-Example NMEA Data
-Input:
+### Example Data Flow
+**Input sent from Python:**
+```text
 $GPGGA,172814.0,3723.46587704,N,12202.26957864,W,2,6,1.2,18.893,M,-25.669,M,2.0*4F
+```
+**Hardware Processing:**
+`UART RX` → `NMEA Parser FSM` → `Checksum Validation` → `UART TX Response`
 
-Processing:
-UART RX
-   |
-   v
-NMEA Parser FSM
-   |
-   v
-Checksum Validation
-   |
-   v
-UART TX Response
+---
 
-LED Debug Indicator
-LED	Function
-LED0	FSM status indicator
-LED1	Checksum valid
-LED2	Checksum error
-LED3	UART RX activity
+## Debugging Guide
 
+The Zybo's onboard LEDs are mapped to specific internal signals for real-time hardware debugging:
 
-Challenges and Solutions
-1. UART Communication
-Problem:
-The Zybo board required an external serial interface for communication.
-Solution:
-FTDI USB-TTL converter was used as a UART RX/TX bridge between PC and FPGA.
-2. Constraint Configuration
-Problem:
-The initial implementation used an incorrect XDC constraint file from another Zybo variant.
-Solution:
-The constraint file was updated according to the actual Zybo board pin mapping.
-3. UART and Parser Debugging
-Problem:
-It was difficult to identify whether the issue came from hardware, UART communication, or parser logic.
-Solution:
-The system was tested step-by-step:
-UART RX
-   |
-NMEA Parser FSM
-   |
-Checksum Validation
-   |
-UART TX
+| LED | Function |
+|:---:|----------|
+| **LED0** | FSM status indicator (active while parsing) |
+| **LED1** | Checksum Valid indicator (lights up on successful match) |
+| **LED2** | Checksum Error indicator (lights up on mismatch) |
+| **LED3** | UART RX activity (toggles on received bytes) |
 
-LED indicators and serial monitoring were used during debugging.
-Result
-The FPGA successfully receives NMEA messages through UART communication, processes the message using an FSM-based parser, validates the checksum, and transmits processed data back through UART.
-Conclusion
-This project demonstrates the implementation of a real-time NMEA Parser on FPGA using UART communication and FSM-based processing.
-The system integrates serial communication, digital design, and hardware-based data processing to create an embedded FPGA application capable of handling structured NMEA data.
+---
+
+## Challenges and Solutions
+
+1. **UART Communication Routing**
+   * **Problem:** The base Zybo board setup required a reliable serial interface that bypassed onboard complexities for direct module testing.
+   * **Solution:** Interfaced an external FTDI USB-TTL converter directly to the PMOD headers, acting as a clean UART RX/TX bridge.
+2. **Constraint Configuration Issues**
+   * **Problem:** Initial builds failed or behaved erratically due to an incorrect XDC pinout file sourced from a different Zybo variant.
+   * **Solution:** Audited the board schematic and updated the `zybo.xdc` file to perfectly match the specific XC7Z010 pin mapping.
+3. **Isolating Parsing Logic from Hardware Bugs**
+   * **Problem:** When outputs were garbled, it was difficult to tell if the issue lay in the FTDI electrical connection, UART timing, or FSM logic.
+   * **Solution:** Implemented the LED debug mapping described above to visually isolate the pipeline stages in real time.
+
+---
+
+## Conclusion
+This project successfully demonstrates the deployment of a real-time, hardware-accelerated NMEA Parser on an FPGA. By integrating serial communication, rigorous digital design, and FSM-based data processing, it highlights how structured textual data can be efficiently managed at the bare-metal hardware level.
